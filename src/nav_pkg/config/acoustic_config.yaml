@@ -1,0 +1,12 @@
+acoustic_ranger:                # must match the node name
+  ros__parameters:
+    port: /dev/ttyUSB1          # NM3 serial port; prefer a stable /dev/serial/by-id/... path
+    remote_address: 2           # 0-255, address of the remote modem
+    publish_rate_hz: 0.5        # ping + publish rate, also the reconnect rate (a timed-out ping can stretch one period)
+    ping_timeout_s: 5.0         # wait this long for the range reply
+    speed_of_sound: 1500.0      # m/s
+    tof_scale: 1.0              # 0.5 if the modem's ToF is round-trip (not yet verified on hardware)
+    frame_id: acoustic_link
+    min_range_m: 0.0
+    max_range_m: 3000.0
+    nm3_driver_path: /home/ashik_rasul/works/ros_nav_ws/utils/nm3-python-simulator  # folder containing nm3driver/

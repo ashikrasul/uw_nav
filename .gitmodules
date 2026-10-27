@@ -1,0 +1,3 @@
+[submodule "utils/nm3-python-simulator"]
+	path = utils/nm3-python-simulator
+	url = https://github.com/ashikrasul/nm3-python-simulator.git

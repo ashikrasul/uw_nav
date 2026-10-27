@@ -1,0 +1,9 @@
+gps_publisher:                  # must match the node name
+  ros__parameters:
+    port: /dev/ttyUSB0          # prefer a stable /dev/serial/by-id/... path
+    baud_rate: 115200           # one of 9600, 14400, 19200, 38400, 57600, 115200
+    update_rate_hz: 10.0        # 1 to 10
+    frame_id: gps_link
+    uere_m: 3.0                 # 1-sigma range error used for covariance [m]
+    stale_timeout_s: 2.0        # watchdog: warn if no GGA for this long
+    reconnect_period_s: 2.0     # retry interval when the port is unavailable
