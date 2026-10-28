@@ -27,4 +27,13 @@ def generate_launch_description():
             respawn=True,
             respawn_delay=2.0,
         ),
+        Node(
+            package='nav_pkg',
+            executable='imu_node',
+            name='imu_publisher',
+            parameters=[os.path.join(config_dir, 'imu_config.yaml')],
+            output='screen',
+            respawn=True,
+            respawn_delay=2.0,
+        ),
     ])

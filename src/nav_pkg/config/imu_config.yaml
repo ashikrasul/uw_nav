@@ -1,0 +1,23 @@
+imu_publisher:                  # must match the node name
+  ros__parameters:
+    i2c_bus: 1                  # /dev/i2c-1 = SDA/SCL on the Pi GPIO header
+    i2c_address: 40             # 0x28 (41 = 0x29 if the ADR pin is high)
+    operation_mode: NDOF        # NDOF, NDOF_FMC_OFF, IMUPLUS, COMPASS, M4G, AMG, ACCGYRO, ...
+    publish_rate_hz: 50.0       # fusion output updates at 100 Hz max
+    frame_id: imu_link
+    reconnect_period_s: 2.0     # retry interval when the sensor is not responding
+
+    # outputs (true = publish); the mode must provide them, else startup fails
+    publish_imu: true           # imu/data          sensor_msgs/Imu
+    publish_mag: true           # imu/mag           sensor_msgs/MagneticField
+    publish_euler: false        # imu/euler         geometry_msgs/Vector3Stamped (roll, pitch, heading) [rad]
+    publish_linear_accel: false # imu/linear_accel  geometry_msgs/Vector3Stamped
+    publish_gravity: false      # imu/gravity       geometry_msgs/Vector3Stamped
+    publish_temperature: false  # imu/temperature   sensor_msgs/Temperature
+    publish_calibration: true   # imu/calibration   std_msgs/UInt8MultiArray [sys, gyro, accel, mag] 0-3
+
+    # 1-sigma noise used for the diagonal covariances
+    orientation_stddev_rad: 0.02
+    gyro_stddev_rad_s: 0.005
+    accel_stddev_m_s2: 0.05
+    mag_stddev_t: 1.0e-6

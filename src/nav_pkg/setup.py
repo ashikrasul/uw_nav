@@ -31,6 +31,7 @@ setup(
             'waypoint_node = nav_pkg.waypoint_node:main',
             'gps_fix = nav_pkg.gps_fix:main',
             'acoustic_node = nav_pkg.acoustic_node:main',
+            'imu_node = nav_pkg.imu_node:main',
         ],
     },
 )
