@@ -32,11 +32,14 @@ acoustic modem that ranges remote NM3 modems (beacons). Repo: https://github.com
 | `src/nav_pkg/config/imu_config.yaml` | IMU params: bus, address, mode, rate, which outputs to publish |
 | `src/nav_pkg/launch/nav.launch.py` | starts all three nodes, `respawn=True` |
 | `src/nav_pkg/nav_pkg/waypoint_node.py`, `gps_test.py` | older files, not part of the launch |
+| `Dockerfile` | image `ros_nav_ws:humble` (`ros:humble-ros-base`, multi-arch) with all stack deps |
+| `docker/` | `docker-compose.yml` (service `nav`), `entrypoint.sh`, `enter_console.sh`, `restart_service.sh` |
 | `utils/nm3-python-simulator/` | **git submodule** (fork `ashikrasul/nm3-python-simulator`, upstream bensherlock). NM3 driver, simulator, examples. Has its own `CLAUDE.md`. Treat `nm3sim/` and `nm3driver/` as a library; do not edit. |
 
 ## acoustic_node behaviour
-- Imports `nm3driver.nm3driver.Nm3` by adding `nm3_driver_path` (YAML, absolute path to the submodule)
-  to `sys.path`; the driver is not pip-installed.
+- Imports `nm3driver.nm3driver.Nm3` by adding `nm3_driver_path` (YAML) to `sys.path`; the driver is not
+  pip-installed. The YAML holds the **container** path `/ros2_ws/utils/nm3-python-simulator`; running the node
+  directly on the host needs the host path instead.
 - Serial: `serial.Serial(port, 9600, 8N1, timeout=0.1)`, same as `examples/ranging_example.py`.
 - On connect it calls `Nm3.get_address()` (`$?` → `#AnnnV...`, 0.5 s timeout). `-1` → warn
   "open but no NM3 is responding", close, retry next cycle. Warns if local address == `remote_address`.
@@ -55,6 +58,31 @@ acoustic modem that ranges remote NM3 modems (beacons). Repo: https://github.com
   A flag the mode can't provide fails at startup.
 - Worker thread at `publish_rate_hz`; on I2C error disconnects and retries every `reconnect_period_s`; publishes nothing
   while disconnected.
+
+## Docker (layout follows ~/works/rraaa-sim, branch `ashikrasul`)
+- `cd docker && docker compose up -d --build`: entrypoint runs `colcon build --symlink-install --base-paths src`
+  (only `src/`; `utils/` holds other ROS packages) then `ros2 launch nav_pkg nav.launch.py`.
+  Runs as user `ros` (UID/GID 1000, Dockerfile args `USER_UID`/`USER_GID`, in `dialout`), **not root**: see below.
+- Mounts `../src:/ros2_ws/src`, `../utils:/ros2_ws/utils:ro`, `/dev:/dev`; host network, privileged,
+  `restart: unless-stopped`. build/install/log live only in the container.
+- `x-ros` / `x-ros-env` anchors in the compose file are for future services. No roscore needed in ROS 2.
+- `ROS_DOMAIN_ID` and `ROS_LOCALHOST_ONLY` come from the host shell (`~/.bashrc` sets 11 and 1).
+- Don't run the host stack and the container together: both open the same serial ports.
+
+### Host ↔ container DDS (solved 2026-10-28)
+- Symptom when the container ran as root: host `ros2 topic list` showed container topics, but `echo` got
+  nothing (both directions); publisher shown as `_NODE_NAME_UNKNOWN_`.
+- Cause: the `/dev:/dev` mount also shares the host's `/dev/shm`. Fast DDS on both sides sees the same host
+  and sends data through shared-memory files there; root-owned files (`-rw-r--r--`) are unusable by the host
+  user. Discovery is UDP, so topics still showed up.
+- Fix: run the container as UID 1000 (Dockerfile `USER ros`). No `ipc: host`/`pid: host`/DDS profile needed.
+- I2C: on this PC `/dev/i2c-*` is `root:root 600`, so imu_node logs "Permission denied" (no BNO055 here anyway).
+  On the Pi/Jetson, add `group_add: ["<i2c GID>"]` to the service (`getent group i2c`; differs per machine).
+- If a root container ran before, stale root `fastrtps_*` files stay in `/dev/shm`; remove them with
+  `docker run --rm -v /dev/shm:/dev/shm --entrypoint sh ros_nav_ws:humble -c 'rm -f /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_*'`
+  (with no ROS running) or reboot.
+- Test pitfall: start test publishers as a normal background job (`ros2 topic pub ... & PUB=$!`), not in a
+  `( ... &)` subshell, which gave false "no data" results. Use `--no-daemon` if the ros2 daemon errors.
 
 ## Build / run
 ```bash
@@ -94,3 +122,7 @@ ros2 topic echo /acoustic/range
     comparison: record with `ros2 bag record -a` into `~/nav_logs/`, replay in mapviz
     (`tile_map` + `navsat` plugins, origin from `swri_transform_util initialize_origin.py`).
 - `~/nav_logs/nav_20261026_205455` is a leftover bag from that period.
+- 2026-10-28: added `imu_node` (BNO055, committed `a2faacc` on branch `imu-and-docker`) and the Docker setup
+  (`Dockerfile`, `.dockerignore`, `docker/`, `nm3_driver_path` → container path, readme/CLAUDE.md docs):
+  **not committed yet**. DDS issue solved (UID 1000); the `nav` container is running.
+  `adafruit-circuitpython-bno055`, `adafruit-extended-bus` were pip-installed `--user` on this PC for testing.

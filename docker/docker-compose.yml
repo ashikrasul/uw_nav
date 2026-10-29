@@ -1,0 +1,32 @@
+# Run from this folder:  docker compose up -d   |   ./enter_console.sh [service]
+# ROS 2 needs no master: services find each other over DDS on the host network.
+# Add future ROS 2 services with `<<: *ros` and `environment: {<<: *ros-env, ...}`.
+
+x-ros: &ros
+  network_mode: host
+  privileged: true           # serial and I2C access
+  restart: unless-stopped    # back up after a crash or reboot
+  logging:
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-ros-env: &ros-env           # taken from the host shell so host and containers match
+  ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+  ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY:-0}
+
+services:
+  nav:
+    <<: *ros
+    container_name: nav
+    image: ros_nav_ws:humble
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      <<: *ros-env
+      SERVICE_NAME: nav
+    volumes:
+      - ../src:/ros2_ws/src
+      - ../utils:/ros2_ws/utils:ro
+      - /dev:/dev            # re-plugged USB serial devices show up inside the container

@@ -9,4 +9,4 @@ acoustic_ranger:                # must match the node name
     frame_id: acoustic_link
     min_range_m: 0.0
     max_range_m: 3000.0
-    nm3_driver_path: /home/ashik_rasul/works/ros_nav_ws/utils/nm3-python-simulator  # folder containing nm3driver/
+    nm3_driver_path: /ros2_ws/utils/nm3-python-simulator  # container path (docker-compose mounts utils/ here)
