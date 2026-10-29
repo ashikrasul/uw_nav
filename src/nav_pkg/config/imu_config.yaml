@@ -1,6 +1,6 @@
 imu_publisher:                  # must match the node name
   ros__parameters:
-    i2c_bus: 1                  # /dev/i2c-1 = SDA/SCL on the Pi GPIO header
+    i2c_bus: 7                  # header pins 3/5: bus 7 on the Jetson Orin Nano, 1 on a Pi
     i2c_address: 40             # 0x28 (41 = 0x29 if the ADR pin is high)
     operation_mode: NDOF        # NDOF, NDOF_FMC_OFF, IMUPLUS, COMPASS, M4G, AMG, ACCGYRO, ...
     publish_rate_hz: 50.0       # fusion output updates at 100 Hz max

@@ -30,3 +30,4 @@ services:
       - ../src:/ros2_ws/src
       - ../utils:/ros2_ws/utils:ro
       - /dev:/dev            # re-plugged USB serial devices show up inside the container
+    group_add: ["${I2C_GID:?create docker/.env with I2C_GID, see readme}"]   # host i2c group

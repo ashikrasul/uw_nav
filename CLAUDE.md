@@ -77,7 +77,8 @@ acoustic modem that ranges remote NM3 modems (beacons). Repo: https://github.com
   user. Discovery is UDP, so topics still showed up.
 - Fix: run the container as UID 1000 (Dockerfile `USER ros`). No `ipc: host`/`pid: host`/DDS profile needed.
 - I2C: on this PC `/dev/i2c-*` is `root:root 600`, so imu_node logs "Permission denied" (no BNO055 here anyway).
-  On the Pi/Jetson, add `group_add: ["<i2c GID>"]` to the service (`getent group i2c`; differs per machine).
+  The service has `group_add: ["${I2C_GID}"]`, read from untracked `docker/.env` (host i2c GID, differs per
+  machine; compose refuses to start without it).
 - If a root container ran before, stale root `fastrtps_*` files stay in `/dev/shm`; remove them with
   `docker run --rm -v /dev/shm:/dev/shm --entrypoint sh ros_nav_ws:humble -c 'rm -f /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_*'`
   (with no ROS running) or reboot.
@@ -105,6 +106,8 @@ ros2 topic echo /acoustic/range
 - 2026-10-26: the NM3 on ttyUSB1 did **not** answer `$?` (no `#A` reply). Not yet diagnosed: check power,
   whether opening the FTDI port resets the modem (DTR/RTS), baud rate. Next step was a raw `$?` probe
   with the stack stopped.
+- Jetson Orin Nano (JetPack 6, user `jetson_nav`, repo at `~/ws/uw_nav`, no host ROS): BNO055 found at 0x28 on
+  I2C bus 7 (header pins 3/5); i2c GID 116.
 - **NM3 ToF convention unverified** (one-way vs round-trip). Range over a known baseline before trusting
   data; set `tof_scale: 0.5` if it is round-trip.
 
@@ -126,3 +129,5 @@ ros2 topic echo /acoustic/range
   (`Dockerfile`, `.dockerignore`, `docker/`, `nm3_driver_path` → container path, readme/CLAUDE.md docs):
   **not committed yet**. DDS issue solved (UID 1000); the `nav` container is running.
   `adafruit-circuitpython-bno055`, `adafruit-extended-bus` were pip-installed `--user` on this PC for testing.
+- 2026-10-28 (Jetson): readme cut to Docker-only setup/run; removed stray Adafruit gitlinks under `utils/`
+  (they had no `.gitmodules` entry; the libraries come from pip in the Dockerfile).
