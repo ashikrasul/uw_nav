@@ -1,3 +1,9 @@
 [submodule "utils/nm3-python-simulator"]
 	path = utils/nm3-python-simulator
 	url = https://github.com/ashikrasul/nm3-python-simulator.git
+[submodule "utils/Adafruit_CircuitPython_BNO055"]
+	path = utils/Adafruit_CircuitPython_BNO055
+	url = https://github.com/adafruit/Adafruit_CircuitPython_BNO055.git
+[submodule "utils/Adafruit_CircuitPython_GPS"]
+	path = utils/Adafruit_CircuitPython_GPS
+	url = https://github.com/adafruit/Adafruit_CircuitPython_GPS.git

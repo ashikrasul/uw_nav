@@ -13,9 +13,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         i2c-tools \
     && rm -rf /var/lib/apt/lists/*
 
-# Sensor drivers (versions tested on the host)
+# Sensor drivers (versions tested on the host). The GPS/BNO055 pins match the reference
+# submodules in utils/Adafruit_CircuitPython_*; keep them in sync.
 RUN pip3 install --no-cache-dir \
         Adafruit-Blinka==9.2.0 \
+        Jetson.GPIO==2.1.13 \
         adafruit-circuitpython-gps==4.0.0 \
         adafruit-circuitpython-bno055==5.4.22 \
         adafruit-extended-bus==1.0.2

@@ -35,6 +35,7 @@ acoustic modem that ranges remote NM3 modems (beacons). Repo: https://github.com
 | `Dockerfile` | image `ros_nav_ws:humble` (`ros:humble-ros-base`, multi-arch) with all stack deps |
 | `docker/` | `docker-compose.yml` (service `nav`), `entrypoint.sh`, `enter_console.sh`, `restart_service.sh` |
 | `utils/nm3-python-simulator/` | **git submodule** (fork `ashikrasul/nm3-python-simulator`, upstream bensherlock). NM3 driver, simulator, examples. Has its own `CLAUDE.md`. Treat `nm3sim/` and `nm3driver/` as a library; do not edit. |
+| `utils/Adafruit_CircuitPython_BNO055`, `utils/Adafruit_CircuitPython_GPS` | **git submodules**, reference only (upstream adafruit, pinned to tags `5.4.22` / `4.0.0` = the Dockerfile pip pins; keep in sync). The nodes import the pip packages, not these. |
 
 ## acoustic_node behaviour
 - Imports `nm3driver.nm3driver.Nm3` by adding `nm3_driver_path` (YAML) to `sys.path`; the driver is not
@@ -77,8 +78,10 @@ acoustic modem that ranges remote NM3 modems (beacons). Repo: https://github.com
   user. Discovery is UDP, so topics still showed up.
 - Fix: run the container as UID 1000 (Dockerfile `USER ros`). No `ipc: host`/`pid: host`/DDS profile needed.
 - I2C: on this PC `/dev/i2c-*` is `root:root 600`, so imu_node logs "Permission denied" (no BNO055 here anyway).
-  The service has `group_add: ["${I2C_GID}"]`, read from untracked `docker/.env` (host i2c GID, differs per
-  machine; compose refuses to start without it).
+  The service has `group_add: [I2C_GID, GPIO_GID]`, read from untracked `docker/.env` (host GIDs, differ per
+  machine; compose refuses to start without them). On the Jetson, Blinka needs `Jetson.GPIO` (in the
+  Dockerfile), which refuses to import unless `/dev/gpiochip0` (`root:gpio`, GID 999) is writable.
+  A PC has no gpio group: set `GPIO_GID` to the I2C GID.
 - If a root container ran before, stale root `fastrtps_*` files stay in `/dev/shm`; remove them with
   `docker run --rm -v /dev/shm:/dev/shm --entrypoint sh ros_nav_ws:humble -c 'rm -f /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_*'`
   (with no ROS running) or reboot.
@@ -129,5 +132,5 @@ ros2 topic echo /acoustic/range
   (`Dockerfile`, `.dockerignore`, `docker/`, `nm3_driver_path` → container path, readme/CLAUDE.md docs):
   **not committed yet**. DDS issue solved (UID 1000); the `nav` container is running.
   `adafruit-circuitpython-bno055`, `adafruit-extended-bus` were pip-installed `--user` on this PC for testing.
-- 2026-10-28 (Jetson): readme cut to Docker-only setup/run; removed stray Adafruit gitlinks under `utils/`
-  (they had no `.gitmodules` entry; the libraries come from pip in the Dockerfile).
+- 2026-10-28 (Jetson): readme cut to Docker-only setup/run; the stray Adafruit gitlinks under `utils/` (no
+  `.gitmodules` entry) were replaced by proper reference submodules. Added `Jetson.GPIO` + `GPIO_GID`; IMU runs.

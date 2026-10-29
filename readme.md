@@ -9,6 +9,7 @@ BNO055 IMU (`imu/*`). It runs in Docker, so the host only needs Docker. All para
 ```bash
 git clone --recurse-submodules https://github.com/ashikrasul/uw_nav.git && cd uw_nav
 echo "I2C_GID=$(getent group i2c | cut -d: -f3)" > docker/.env   # lets the container open /dev/i2c-*
+echo "GPIO_GID=$(getent group gpio | cut -d: -f3)" >> docker/.env  # /dev/gpiochip* (Jetson); no gpio group on a PC: reuse I2C_GID
 echo "export ROS_DOMAIN_ID=11" >> ~/.bashrc && source ~/.bashrc  # container uses the same domain
 ```
 
