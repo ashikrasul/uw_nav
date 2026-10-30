@@ -1,0 +1,30 @@
+# robot_localization EKF: fuses GPS position (via navsat_transform) and IMU heading.
+# Output: odometry/filtered (pose in odom = local ENU [m], twist in base_link [m/s, rad/s]) + TF odom -> base_link.
+# Reference: https://docs.ros.org/en/humble/p/robot_localization/
+ekf_filter_node:
+  ros__parameters:
+    frequency: 10.0             # output rate of odometry/filtered and TF (also sets the recorded size)
+    sensor_timeout: 0.5         # keep predicting when a sensor goes quiet (unplug)
+    two_d_mode: true            # surface agent: x, y, yaw only
+    publish_tf: true
+    odom_frame: odom
+    base_link_frame: base_link
+    world_frame: odom           # single EKF; odom is the ENU plane anchored at the GPS datum
+
+    # 15 flags: x y z | roll pitch yaw | vx vy vz | vroll vpitch vyaw | ax ay az
+    odom0: odometry/gps         # GPS position in odom, from navsat_transform
+    odom0_config: [true,  true,  false,
+                   false, false, false,
+                   false, false, false,
+                   false, false, false,
+                   false, false, false]
+    odom0_queue_size: 10
+
+    imu0: imu/data              # ENU yaw (magnetic) + yaw rate
+    imu0_config: [false, false, false,
+                  false, false, true,
+                  false, false, false,
+                  false, false, true,
+                  false, false, false]   # set ax, ay true to also fuse acceleration (bias can cause drift)
+    imu0_queue_size: 10
+    imu0_remove_gravitational_acceleration: true

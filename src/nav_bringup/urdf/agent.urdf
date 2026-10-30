@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<!-- Sensor mounting on the agent (REP 103: base_link x forward, y left, z up; metres, radians).
+     Measure the offsets from the base_link origin and fill them in. The IMU must be mounted with
+     x forward and z up, or the rotation set in imu_joint (heading_offset_rad in imu_config.yaml
+     then stays 0). -->
+<robot name="agent">
+  <link name="base_link"/>
+  <link name="gps_link"/>
+  <link name="imu_link"/>
+  <link name="acoustic_link"/>
+
+  <joint name="gps_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="gps_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <joint name="imu_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- NM3 transducer; its depth below the surface is transducer_depth_m in beacon_locator.yaml -->
+  <joint name="acoustic_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="acoustic_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+</robot>

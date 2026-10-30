@@ -7,3 +7,5 @@ gps_publisher:                  # must match the node name
     uere_m: 3.0                 # 1-sigma range error used for covariance [m]
     stale_timeout_s: 2.0        # watchdog: warn if no GGA for this long
     reconnect_period_s: 2.0     # retry interval when the port is unavailable
+    vel_frame_id: odom          # gps/vel axes are ENU (x east, y north), i.e. the odom frame
+    speed_stddev_m_s: 0.2       # 1-sigma velocity error for the gps/vel covariance [m/s]

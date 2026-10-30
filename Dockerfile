@@ -1,4 +1,4 @@
-# ROS 2 Humble image for the nav stack (gps_fix, acoustic_node, imu_node).
+# ROS 2 Humble image for the nav stack (drivers, robot_localization, beacon_locator, foxglove_bridge, rosbag2).
 # Multi-arch base: builds on the x86 PC and on an arm64 Pi/Jetson.
 # Source is not copied in; docker/docker-compose.yml mounts src/ and utils/.
 FROM ros:humble-ros-base
@@ -10,7 +10,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-pip \
         python3-serial \
         python3-colcon-common-extensions \
+        python3-numpy \
         i2c-tools \
+        ros-humble-robot-localization \
+        ros-humble-robot-state-publisher \
+        ros-humble-diagnostic-updater \
+        ros-humble-foxglove-bridge \
+        ros-humble-rosbag2-storage-mcap \
     && rm -rf /var/lib/apt/lists/*
 
 # Sensor drivers (versions tested on the host). The GPS/BNO055 pins match the reference
@@ -40,4 +46,4 @@ RUN chmod +x /entrypoint.sh
 USER ros
 WORKDIR /ros2_ws
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["ros2", "launch", "nav_pkg", "nav.launch.py"]
+CMD ["ros2", "launch", "nav_bringup", "nav.launch.py"]

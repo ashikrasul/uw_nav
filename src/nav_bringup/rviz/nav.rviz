@@ -1,0 +1,44 @@
+# RViz2 layout for a PC with ROS 2: rviz2 -d nav.rviz
+# Trajectory = odometry history. Add a PoseWithCovariance display per extra beacon.
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid (10 m)
+      Enabled: true
+      Cell Size: 10
+      Plane Cell Count: 40
+      Reference Frame: odom
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: true
+    - Class: rviz_default_plugins/Odometry
+      Name: Agent trajectory
+      Enabled: true
+      Topic:
+        Value: /odometry/filtered
+      Keep: 2000
+      Position Tolerance: 0.5
+      Angle Tolerance: 0.2
+      Covariance:
+        Value: true
+    - Class: rviz_default_plugins/PoseWithCovariance
+      Name: Beacon 2
+      Enabled: true
+      Topic:
+        Value: /beacons/beacon_2/pose
+      Shape: Axes
+      Covariance:
+        Value: true
+  Global Options:
+    Fixed Frame: odom
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+  Views:
+    Current:
+      Class: rviz_default_plugins/TopDownOrtho
+      Name: Current View
+      Scale: 5

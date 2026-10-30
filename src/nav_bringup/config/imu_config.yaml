@@ -6,6 +6,8 @@ imu_publisher:                  # must match the node name
     publish_rate_hz: 50.0       # fusion output updates at 100 Hz max
     frame_id: imu_link
     reconnect_period_s: 2.0     # retry interval when the sensor is not responding
+    heading_offset_rad: 0.0     # added to the ENU yaw in imu/data; set so yaw = 0 when the bow (base_link x) points
+                                # magnetic east. Corrects mounting/axis offsets (verify in the field)
 
     # outputs (true = publish); the mode must provide them, else startup fails
     publish_imu: true           # imu/data          sensor_msgs/Imu
@@ -14,10 +16,11 @@ imu_publisher:                  # must match the node name
     publish_linear_accel: false # imu/linear_accel  geometry_msgs/Vector3Stamped
     publish_gravity: false      # imu/gravity       geometry_msgs/Vector3Stamped
     publish_temperature: false  # imu/temperature   sensor_msgs/Temperature
-    publish_calibration: true   # imu/calibration   std_msgs/UInt8MultiArray [sys, gyro, accel, mag] 0-3
+    publish_calibration: false  # imu/calibration   std_msgs/UInt8MultiArray [sys, gyro, accel, mag] 0-3
+                                # (off: the same values are in /diagnostics, 1 Hz)
 
     # 1-sigma noise used for the diagonal covariances
-    orientation_stddev_rad: 0.02
+    orientation_stddev_rad: 0.3
     gyro_stddev_rad_s: 0.005
     accel_stddev_m_s2: 0.05
     mag_stddev_t: 1.0e-6

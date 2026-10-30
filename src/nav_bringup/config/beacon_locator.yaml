@@ -1,0 +1,12 @@
+# Remote modem (beacon) positions by linear least squares (normal equations) over all pings so far.
+# Beacon list and speed of sound are in beacons.yaml.
+beacon_locator:
+  ros__parameters:
+    transducer_depth_m: 0.5     # depth of the agent's NM3 transducer below the surface [m] (set the real value)
+    world_frame: odom           # EKF world frame (local ENU)
+    transducer_frame: acoustic_link   # TF frame of the transducer (urdf/agent.urdf)
+    min_pings: 10               # solve only after this many valid ranges per beacon
+    min_spread_m: 5.0           # ...and when ping positions spread at least this much in both directions
+                                # (rejects straight-line tracks, which cannot fix the beacon)
+    outlier_gate_m: 20.0        # drop ranges this far from the current solution (multipath); 0 = off
+    max_range_m: 3000.0         # ignore longer ranges

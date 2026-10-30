@@ -1,0 +1,14 @@
+# robot_localization navsat_transform: GPS lat/lon <-> odom (local ENU). The datum is the first GPS fix.
+# Inputs: gps/fix, imu (remapped to imu/data), odometry/filtered.
+# Outputs: odometry/gps (to the EKF), gps/filtered (EKF estimate as lat/lon), services toLL / fromLL.
+navsat_transform:
+  ros__parameters:
+    frequency: 10.0
+    delay: 3.0                          # wait this long for data before computing the transform
+    magnetic_declination_radians: -0.0820   # 4.70 deg W (NOAA, 2026-10-30, test site); east positive
+    yaw_offset: 0.0                     # imu_node already publishes ENU yaw (0 = east)
+    zero_altitude: true
+    broadcast_cartesian_transform: false
+    publish_filtered_gps: true
+    use_odometry_yaw: false
+    wait_for_datum: false

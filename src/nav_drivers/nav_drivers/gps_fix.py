@@ -3,11 +3,16 @@
 Publishes sensor_msgs/NavSatFix on 'gps/fix', one message per GGA sentence,
 so the publish rate equals the receiver's configured update rate.
 
+Also publishes geometry_msgs/TwistWithCovarianceStamped on 'gps/vel', one per RMC
+sentence with a fix: the receiver's Doppler speed over ground and course as an ENU
+velocity (linear.x east, linear.y north, m/s; course is relative to true north).
+
 Robustness:
   - starts even if the GPS is not plugged in, and keeps retrying
   - detects a USB unplug, closes the port, reconnects and reconfigures
   - publishes STATUS_NO_FIX (NaN position) when the receiver has no fix
   - watchdog warns when no GGA data has arrived within stale_timeout_s
+  - hardware errors never stop the node; the state is shown on /diagnostics
 """
 
 import math
@@ -17,12 +22,16 @@ import time
 import adafruit_gps
 import rclpy
 import serial
+from diagnostic_msgs.msg import DiagnosticStatus
+from diagnostic_updater import Updater
+from geometry_msgs.msg import TwistWithCovarianceStamped
 from rclpy.node import Node
 from sensor_msgs.msg import NavSatFix, NavSatStatus
 
 DEFAULT_BAUD = 9600            # MTK3339 power-up baud rate
 NMEA_BYTES_PER_FIX = 145       # approx. one GGA + one RMC sentence incl. CRLF
 SUPPORTED_BAUDS = (9600, 14400, 19200, 38400, 57600, 115200)
+KNOT_M_S = 0.514444            # 1 knot in m/s
 
 
 def _f(x):
@@ -42,6 +51,8 @@ class GpsPublisher(Node):
         self.declare_parameter('uere_m', 3.0)
         self.declare_parameter('stale_timeout_s', 2.0)
         self.declare_parameter('reconnect_period_s', 2.0)
+        self.declare_parameter('vel_frame_id', 'odom')
+        self.declare_parameter('speed_stddev_m_s', 0.2)
 
         self.port = self.get_parameter('port').value
         self.baud = int(self.get_parameter('baud_rate').value)
@@ -50,16 +61,26 @@ class GpsPublisher(Node):
         self.uere = float(self.get_parameter('uere_m').value)
         self.stale_timeout = float(self.get_parameter('stale_timeout_s').value)
         self.reconnect_period = float(self.get_parameter('reconnect_period_s').value)
+        self.vel_frame_id = self.get_parameter('vel_frame_id').value
+        self.speed_var = float(self.get_parameter('speed_stddev_m_s').value) ** 2
         self._validate_parameters()
 
         # ---------------- ROS interfaces ----------------
         self.pub = self.create_publisher(NavSatFix, 'gps/fix', 10)
+        self.vel_pub = self.create_publisher(TwistWithCovarianceStamped, 'gps/vel', 10)
         self.create_timer(1.0, self.watchdog)
 
         # ---------------- reader thread state ----------------
         self.uart = None
         self.gps = None
         self.last_gga_time = None   # time.monotonic() of the last GGA sentence
+        self.error = 'not connected yet'   # port problem, None while connected
+        self.fix_status = None             # NavSatStatus of the last GGA
+
+        self.diagnostics = Updater(self)
+        self.diagnostics.setHardwareID(f'GPS on {self.port}')
+        self.diagnostics.add('gps', self.diagnose)
+
         self.running = True
 
         self.reader = threading.Thread(target=self.reader_loop, daemon=True)
@@ -94,11 +115,12 @@ class GpsPublisher(Node):
             self.gps = adafruit_gps.GPS(self.uart, debug=False)
             self.configure_receiver()
         except (serial.SerialException, OSError) as e:
-            self.get_logger().warning(
-                f'Cannot open {self.port}: {e}', throttle_duration_sec=10.0)
+            self.error = f'cannot open {self.port}: {e}'
+            self.get_logger().error(self.error, throttle_duration_sec=10.0)
             self.disconnect()
             return False
 
+        self.error = None
         self.last_gga_time = time.monotonic()   # grace period for the watchdog
         self.get_logger().info(f'Connected to GPS on {self.port}')
         return True
@@ -149,8 +171,11 @@ class GpsPublisher(Node):
                     if 'GGA' in sentence:
                         self.last_gga_time = time.monotonic()
                         self.publish_fix()
+                    elif 'RMC' in sentence:
+                        self.publish_vel()
             except (serial.SerialException, OSError) as e:
-                self.get_logger().error(f'Serial connection lost: {e}')
+                self.error = f'serial connection to {self.port} lost: {e}'
+                self.get_logger().error(self.error)
                 self.disconnect()
                 continue
             except Exception as e:
@@ -175,6 +200,7 @@ class GpsPublisher(Node):
         else:
             status = NavSatStatus.STATUS_FIX
         msg.status.status = status
+        self.fix_status = status
         msg.status.service = NavSatStatus.SERVICE_GPS
 
         if status == NavSatStatus.STATUS_NO_FIX:
@@ -198,6 +224,24 @@ class GpsPublisher(Node):
 
         self.pub.publish(msg)
 
+    def publish_vel(self):
+        g = self.gps
+        if not g.fix_quality or g.speed_knots is None:
+            return                            # RMC status V (no fix) or no speed field
+        if g.track_angle_deg is None:
+            v, course = 0.0, 0.0              # receiver omits the course when stationary
+        else:
+            v, course = g.speed_knots * KNOT_M_S, math.radians(g.track_angle_deg)
+
+        msg = TwistWithCovarianceStamped()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = self.vel_frame_id
+        msg.twist.twist.linear.x = v * math.sin(course)   # east (course is clockwise from north)
+        msg.twist.twist.linear.y = v * math.cos(course)   # north
+        for i in (0, 7, 14):                  # vx, vy, vz on the 6x6 diagonal
+            msg.twist.covariance[i] = self.speed_var
+        self.vel_pub.publish(msg)
+
     # ------------------------------------------------------------------ #
     # Watchdog (runs in the executor, main thread)
     # ------------------------------------------------------------------ #
@@ -210,6 +254,20 @@ class GpsPublisher(Node):
                 f'No GGA data for more than {self.stale_timeout:.1f} s '
                 f'(check baud rate and receiver configuration)',
                 throttle_duration_sec=5.0)
+
+    def diagnose(self, stat):
+        last = self.last_gga_time
+        if self.error:
+            stat.summary(DiagnosticStatus.ERROR, self.error)
+        elif last is None or time.monotonic() - last > self.stale_timeout:
+            stat.summary(DiagnosticStatus.ERROR,
+                         f'no GGA data for more than {self.stale_timeout:.1f} s')
+        elif self.fix_status == NavSatStatus.STATUS_NO_FIX:
+            stat.summary(DiagnosticStatus.WARN, 'no fix')
+        else:
+            stat.summary(DiagnosticStatus.OK, 'fix')
+        stat.add('port', self.port)
+        return stat
 
     def destroy_node(self):
         self.running = False

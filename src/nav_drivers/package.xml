@@ -1,21 +1,19 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>nav_pkg</name>
-  <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <name>nav_drivers</name>
+  <version>0.1.0</version>
+  <description>Sensor drivers: GPS, BNO055 IMU, NM3 acoustic modem</description>
   <maintainer email="ashik.rasul@outlook.com">ashik_rasul</maintainer>
   <license>TODO: License declaration</license>
 
   <depend>rclpy</depend>
-  <depend>geometry_msgs</depend>
-  <depend>nav_msgs</depend>
   <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
   <depend>std_msgs</depend>
+  <depend>diagnostic_msgs</depend>
+  <depend>diagnostic_updater</depend>
   <exec_depend>python3-serial</exec_depend>
-  <exec_depend>launch</exec_depend>
-  <exec_depend>launch_ros</exec_depend>
-  <exec_depend>ament_index_python</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

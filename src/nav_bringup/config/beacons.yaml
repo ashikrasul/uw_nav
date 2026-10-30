@@ -1,0 +1,5 @@
+# Shared by acoustic_ranger and beacon_locator (the launch file passes this file to both).
+/**:
+  ros__parameters:
+    remote_addresses: [2]       # NM3 addresses (0-255) of the remote modems, polled in this order
+    speed_of_sound: 1500.0      # m/s

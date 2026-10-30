@@ -1,10 +1,9 @@
-acoustic_ranger:                # must match the node name
+acoustic_ranger:                # must match the node name; beacon list is in beacons.yaml
   ros__parameters:
     port: /dev/ttyUSB1          # NM3 serial port; prefer a stable /dev/serial/by-id/... path
-    remote_address: 2           # 0-255, address of the remote modem
-    publish_rate_hz: 0.5        # ping + publish rate, also the reconnect rate (a timed-out ping can stretch one period)
-    ping_timeout_s: 5.0         # wait this long for the range reply
-    speed_of_sound: 1500.0      # m/s
+    ping_rate_hz: 0.5           # one beacon per slot, start-to-start (a timed-out ping can stretch a slot)
+    ping_timeout_s: 5.0         # wait this long for each reply
+    ping_retries: 1             # extra pings to a beacon after a timeout, before giving up (publishes inf)
     tof_scale: 1.0              # 0.5 if the modem's ToF is round-trip (not yet verified on hardware)
     frame_id: acoustic_link
     min_range_m: 0.0

@@ -33,3 +33,21 @@ services:
     group_add:   # host i2c and gpio groups (Jetson.GPIO needs /dev/gpiochip0 on import)
       - "${I2C_GID:?create docker/.env with I2C_GID, see readme}"
       - "${GPIO_GID:?create docker/.env with GPIO_GID, see readme}"
+
+  # Records every topic of each run to ~/nav_logs/nav_<date>_<time>/ (rosbag2, MCAP, zstd-compressed chunks;
+  # Foxglove and ros2 bag play read it directly).
+  # A new bag starts each time the service starts (compose up, reboot); stop with `docker compose stop record`.
+  record:
+    <<: *ros
+    container_name: nav_record
+    image: ros_nav_ws:humble
+    environment:
+      <<: *ros-env
+      SERVICE_NAME: record
+    volumes:
+      - ${HOME}/nav_logs:/logs   # create it first (mkdir -p ~/nav_logs), else Docker makes it root-owned
+      - /dev/shm:/dev/shm        # same Fast DDS shared memory as the nav service
+    entrypoint: ["bash", "-c"]
+    command: ["source /opt/ros/humble/setup.bash && exec ros2 bag record -a -s mcap --storage-preset-profile zstd_fast -o /logs/nav_$$(date +%Y%m%d_%H%M%S)"]
+    stop_signal: SIGINT          # lets rosbag2 close the file cleanly
+    stop_grace_period: 15s
