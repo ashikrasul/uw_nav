@@ -1,6 +1,6 @@
 gps_publisher:                  # must match the node name
   ros__parameters:
-    port: /dev/ttyUSB0          # prefer a stable /dev/serial/by-id/... path
+    port: /dev/ttyUSB*          # glob: the node uses the first port that sends NMEA (a fixed path works too)
     baud_rate: 115200           # one of 9600, 14400, 19200, 38400, 57600, 115200
     update_rate_hz: 10.0        # 1 to 10
     frame_id: gps_link

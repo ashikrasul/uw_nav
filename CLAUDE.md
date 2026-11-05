@@ -31,6 +31,7 @@ acoustic modem that ranges remote NM3 modems (beacons). Repo: https://github.com
 | `src/nav_drivers/nav_drivers/gps_fix.py` | Adafruit Ultimate GPS (MTK3339) → `sensor_msgs/NavSatFix` on `gps/fix`, Doppler velocity on `gps/vel` (node `gps_publisher`; still declares params with code defaults) |
 | `src/nav_drivers/nav_drivers/imu_node.py` | BNO055 9-DOF IMU over I2C (node `imu_publisher`) |
 | `src/nav_drivers/nav_drivers/acoustic_node.py` | NM3 ranging of several beacons (node `acoustic_ranger`) |
+| `src/nav_drivers/nav_drivers/serial_ports.py` | plain-Python helper: `find_port(glob, probe)` + `nmea_probe`; finds a device by what answers on the port |
 | `src/nav_localization/nav_localization/beacon_locator.py` | beacon positions by least squares (node `beacon_locator`) |
 | `src/nav_bringup/launch/nav.launch.py` | whole stack: table `NODES` (package, exe, name, YAMLs, remaps) + robot_state_publisher |
 | `src/nav_bringup/config/` | all YAML: `gps_fix`, `imu_config`, `acoustic_config`, `beacons` (shared `/**`: `remote_addresses`, `speed_of_sound`; passed to acoustic_ranger and beacon_locator), `ekf`, `navsat`, `beacon_locator`, `foxglove_bridge` |
@@ -62,7 +63,8 @@ acoustic modem that ranges remote NM3 modems (beacons). Repo: https://github.com
 - Imports `nm3driver.nm3driver.Nm3` by adding `nm3_driver_path` (YAML) to `sys.path`; the driver is not
   pip-installed. The YAML holds the **container** path `/ros2_ws/utils/nm3-python-simulator`; running the node
   directly on the host needs the host path instead.
-- Serial: `serial.Serial(port, 9600, 8N1, timeout=0.1)`, same as `examples/ranging_example.py`.
+- Serial: `serial.Serial(port, 9600, 8N1, timeout=0.1, exclusive=True)`, same as `examples/ranging_example.py`.
+- `port` is a glob (`/dev/ttyUSB*`): on each connect it tries the matches and keeps the first that answers `$?`.
 - On connect it calls `Nm3.get_address()` (`$?` → `#AnnnV...`, 0.5 s timeout). `-1` → warn
   "open but no NM3 is responding", close, retry next cycle. Warns if the local address is in `remote_addresses`.
 - Worker thread loop (send_ping blocks); any exception is caught, reported, and the loop goes on.
@@ -147,9 +149,13 @@ ros2 topic echo /acoustic/beacon_2/range
   (`-p port:=/dev/does_not_exist`).
 
 ## Hardware notes
-- `/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A94OLO1E-if00-port0` (was `ttyUSB1`): presumably the NM3.
-- `/dev/serial/by-id/usb-Silicon_Labs_CP2102N_USB_to_UART_Bridge_Controller_...` (was `ttyUSB0`): GPS.
-- Config still uses `/dev/ttyUSB0` / `/dev/ttyUSB1`; switching to the by-id paths is recommended.
+- NM3 = FTDI FT232R (`0403:6001`), GPS = Silicon Labs CP2102N (`10c4:ea60`). Their `ttyUSBx` numbers swap
+  between boots/replugs, so both nodes auto-detect (2026-11-05): `port: /dev/ttyUSB*` (glob) in YAML,
+  `serial_ports.find_port` tries each match. GPS: listens only (~1.5 s per baud, configured then 9600) for
+  `$GP`/`$GN`; NM3: sends `$?`. Ports opened `exclusive=True` (flock), so a port the other node holds is
+  skipped as busy. Tested on the Jetson: GPS on ttyUSB1, NM3 (address 20) on ttyUSB0. The GPS node
+  reconnects after `stale_timeout_s` without GGA (seen once: the 115200 baud switch did not take).
+- 2026-11-05: the NM3 answers `$?` (local address 20).
 - 2026-10-26: the NM3 on ttyUSB1 did **not** answer `$?` (no `#A` reply). Not yet diagnosed: check power,
   whether opening the FTDI port resets the modem (DTR/RTS), baud rate. Next step was a raw `$?` probe
   with the stack stopped.

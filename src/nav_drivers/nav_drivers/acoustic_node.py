@@ -22,6 +22,8 @@ from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from sensor_msgs.msg import Range
 
+from nav_drivers.serial_ports import find_port
+
 
 class AcousticRanger(Node):
     def __init__(self):
@@ -31,7 +33,8 @@ class AcousticRanger(Node):
         def get(name):
             return self.get_parameter(name).value
 
-        self.port = get('port')
+        self.port_pattern = get('port')            # glob, e.g. /dev/ttyUSB*
+        self.port = None                           # the port found, once connected
         self.addresses = [int(a) for a in get('remote_addresses')]
         self.period = 1.0 / float(get('ping_rate_hz'))
         self.ping_timeout = float(get('ping_timeout_s'))
@@ -59,29 +62,39 @@ class AcousticRanger(Node):
         self.no_reply = set()                      # beacons that did not answer last time
 
         self.diagnostics = Updater(self)
-        self.diagnostics.setHardwareID(f'NM3 on {self.port}')
+        self.diagnostics.setHardwareID(f'NM3 on {self.port_pattern}')
         self.diagnostics.add('acoustic modem', self.diagnose)
 
         self.running = True
         self.worker = threading.Thread(target=self.ping_loop, daemon=True)
         self.worker.start()
         self.get_logger().info(
-            f'Acoustic ranger started: port={self.port}, beacons={self.addresses}, '
+            f'Acoustic ranger started: port={self.port_pattern}, beacons={self.addresses}, '
             f'{1.0 / self.period} pings/s, retries={self.ping_retries}')
 
     # ------------------------------------------------------------------ connection
-    def connect(self):
+    def probe(self, port):
+        """Return (uart, nm3, local address) if an NM3 answers '$?' on port, else None."""
+        # Same settings as ranging_example.py: 9600 8N1, 100 ms read timeout
+        uart = serial.Serial(port, 9600, 8, serial.PARITY_NONE, serial.STOPBITS_ONE, 0.1,
+                             exclusive=True)
         try:
-            # Same settings as ranging_example.py: 9600 8N1, 100 ms read timeout
-            self.uart = serial.Serial(self.port, 9600, 8, serial.PARITY_NONE,
-                                      serial.STOPBITS_ONE, 0.1)
-            self.nm3 = self._nm3_cls(input_stream=self.uart, output_stream=self.uart)
-            local_address = self.nm3.get_address()   # '$?' -> '#AnnnV...'
-        except (serial.SerialException, OSError) as e:
-            return self.fail(f'cannot open {self.port}: {e}')
-        if local_address < 0:
-            return self.fail(f'{self.port} is open but no NM3 is responding '
-                             f'(check power, cable and baud rate)')
+            nm3 = self._nm3_cls(input_stream=uart, output_stream=uart)
+            address = nm3.get_address()              # '$?' -> '#AnnnV...', -1 if no reply
+        except BaseException:
+            uart.close()
+            raise
+        if address < 0:
+            uart.close()
+            return None
+        return uart, nm3, address
+
+    def connect(self):
+        port, found = find_port(self.port_pattern, self.probe)
+        if port is None:
+            return self.fail(f'no NM3 is responding: {found} (check power and cable)')
+        self.port = port
+        self.uart, self.nm3, local_address = found
         if local_address in self.addresses:
             self.get_logger().warning(
                 f'Local modem address {local_address} is in remote_addresses; '
@@ -167,7 +180,7 @@ class AcousticRanger(Node):
             stat.summary(DiagnosticStatus.WARN, f'no reply from beacon(s) {sorted(self.no_reply)}')
         else:
             stat.summary(DiagnosticStatus.OK, 'connected')
-        stat.add('port', self.port)
+        stat.add('port', self.port or 'none')
         for address, last in self.last.items():
             stat.add(f'beacon {address}', last)
         return stat

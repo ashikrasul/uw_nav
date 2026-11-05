@@ -11,7 +11,7 @@ Robustness:
   - starts even if the GPS is not plugged in, and keeps retrying
   - detects a USB unplug, closes the port, reconnects and reconfigures
   - publishes STATUS_NO_FIX (NaN position) when the receiver has no fix
-  - watchdog warns when no GGA data has arrived within stale_timeout_s
+  - reconnects (and re-finds the port) when no GGA data has arrived within stale_timeout_s
   - hardware errors never stop the node; the state is shown on /diagnostics
 """
 
@@ -28,7 +28,10 @@ from geometry_msgs.msg import TwistWithCovarianceStamped
 from rclpy.node import Node
 from sensor_msgs.msg import NavSatFix, NavSatStatus
 
+from nav_drivers.serial_ports import find_port, nmea_probe
+
 DEFAULT_BAUD = 9600            # MTK3339 power-up baud rate
+NMEA_LISTEN_S = 1.5            # listen time per baud when looking for the GPS (1 Hz at power-up)
 NMEA_BYTES_PER_FIX = 145       # approx. one GGA + one RMC sentence incl. CRLF
 SUPPORTED_BAUDS = (9600, 14400, 19200, 38400, 57600, 115200)
 KNOT_M_S = 0.514444            # 1 knot in m/s
@@ -44,7 +47,7 @@ class GpsPublisher(Node):
         super().__init__('gps_publisher')
 
         # ---------------- parameters ----------------
-        self.declare_parameter('port', '/dev/ttyUSB0')
+        self.declare_parameter('port', '/dev/ttyUSB*')
         self.declare_parameter('baud_rate', 115200)
         self.declare_parameter('update_rate_hz', 10.0)
         self.declare_parameter('frame_id', 'gps_link')
@@ -54,7 +57,8 @@ class GpsPublisher(Node):
         self.declare_parameter('vel_frame_id', 'odom')
         self.declare_parameter('speed_stddev_m_s', 0.2)
 
-        self.port = self.get_parameter('port').value
+        self.port_pattern = self.get_parameter('port').value   # glob, e.g. /dev/ttyUSB*
+        self.port = None                                        # the port found, once connected
         self.baud = int(self.get_parameter('baud_rate').value)
         self.rate_hz = float(self.get_parameter('update_rate_hz').value)
         self.frame_id = self.get_parameter('frame_id').value
@@ -78,7 +82,7 @@ class GpsPublisher(Node):
         self.fix_status = None             # NavSatStatus of the last GGA
 
         self.diagnostics = Updater(self)
-        self.diagnostics.setHardwareID(f'GPS on {self.port}')
+        self.diagnostics.setHardwareID(f'GPS on {self.port_pattern}')
         self.diagnostics.add('gps', self.diagnose)
 
         self.running = True
@@ -86,7 +90,7 @@ class GpsPublisher(Node):
         self.reader = threading.Thread(target=self.reader_loop, daemon=True)
         self.reader.start()
         self.get_logger().info(
-            f'GPS publisher started: port={self.port}, baud={self.baud}, '
+            f'GPS publisher started: port={self.port_pattern}, baud={self.baud}, '
             f'rate={self.rate_hz} Hz')
 
     def _validate_parameters(self):
@@ -109,13 +113,21 @@ class GpsPublisher(Node):
     # Connection management (runs in the reader thread)
     # ------------------------------------------------------------------ #
     def connect(self):
-        """Open the port and configure the receiver. Returns True on success."""
+        """Find the port that sends NMEA and configure the receiver. Returns True on success."""
+        port, found = find_port(self.port_pattern,
+                                nmea_probe((self.baud, DEFAULT_BAUD), NMEA_LISTEN_S))
+        if port is None:
+            self.error = f'no GPS found: {found}'
+            self.get_logger().error(self.error, throttle_duration_sec=10.0)
+            return False
+        self.port, self.uart = port, found
         try:
-            self.uart = serial.Serial(self.port, baudrate=DEFAULT_BAUD, timeout=0.5)
+            self.uart.timeout = 0.5
+            self.uart.baudrate = DEFAULT_BAUD   # configure_receiver starts at the power-up baud
             self.gps = adafruit_gps.GPS(self.uart, debug=False)
             self.configure_receiver()
         except (serial.SerialException, OSError) as e:
-            self.error = f'cannot open {self.port}: {e}'
+            self.error = f'cannot configure GPS on {self.port}: {e}'
             self.get_logger().error(self.error, throttle_duration_sec=10.0)
             self.disconnect()
             return False
@@ -160,6 +172,13 @@ class GpsPublisher(Node):
         while self.running and rclpy.ok():
             if self.uart is None and not self.connect():
                 time.sleep(self.reconnect_period)
+                continue
+            if time.monotonic() - self.last_gga_time > self.stale_timeout:
+                # e.g. the baud switch did not take, or the module lost power (back at 9600)
+                self.error = (f'no GGA data on {self.port} for {self.stale_timeout:.1f} s, '
+                              f'reconnecting')
+                self.get_logger().error(self.error)
+                self.disconnect()
                 continue
 
             try:
@@ -266,7 +285,7 @@ class GpsPublisher(Node):
             stat.summary(DiagnosticStatus.WARN, 'no fix')
         else:
             stat.summary(DiagnosticStatus.OK, 'fix')
-        stat.add('port', self.port)
+        stat.add('port', self.port or 'none')
         return stat
 
     def destroy_node(self):
