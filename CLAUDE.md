@@ -155,10 +155,8 @@ ros2 topic echo /acoustic/beacon_2/range
   `$GP`/`$GN`; NM3: sends `$?`. Ports opened `exclusive=True` (flock), so a port the other node holds is
   skipped as busy. Tested on the Jetson: GPS on ttyUSB1, NM3 (address 20) on ttyUSB0. The GPS node
   reconnects after `stale_timeout_s` without GGA (seen once: the 115200 baud switch did not take).
-- 2026-11-05: the NM3 answers `$?` (local address 20).
-- 2026-10-26: the NM3 on ttyUSB1 did **not** answer `$?` (no `#A` reply). Not yet diagnosed: check power,
-  whether opening the FTDI port resets the modem (DTR/RTS), baud rate. Next step was a raw `$?` probe
-  with the stack stopped.
+- The local NM3 answers `$?` (address 20, 2026-11-05). The 2026-10-26 "no `#A` reply" was most likely the
+  node opening the GPS port (ttyUSB numbers swapped).
 - Jetson Orin Nano (JetPack 6, user `jetson_nav`, repo at `~/ws/uw_nav`, no host ROS): BNO055 found at 0x28 on
   I2C bus 7 (header pins 3/5); i2c GID 116.
 - **NM3 ToF convention unverified** (one-way vs round-trip). Range over a known baseline before trusting
@@ -190,3 +188,8 @@ ros2 topic echo /acoustic/beacon_2/range
   (IMU 50 Hz, GPS 10 Hz without fix indoors, EKF ~24 Hz, NM3 not plugged → ERROR on /diagnostics, no crash).
   Open: field checks (ToF convention, heading offset, declination, real transducer depth and URDF offsets),
   physical unplug test.
+- 2026-11-05 (Jetson, commit `277e219`): `docker compose up` gave "no connection" for GPS and NM3 because
+  ttyUSB0/1 had swapped. Added serial port auto-detect (`serial_ports.py`, `port: /dev/ttyUSB*`) and the GPS
+  stale-data reconnect. Verified over 5 restarts: NM3 on ttyUSB0, GPS on ttyUSB1, `/gps/fix` 10 Hz, IMU up.
+  Open: the reconnect path is untested on hardware (unplug the GPS while running);
+  `beacons.yaml` holds uncommitted bench values (`remote_addresses: [10]`, `speed_of_sound: 350`, air).
